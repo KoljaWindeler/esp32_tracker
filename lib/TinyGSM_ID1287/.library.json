@@ -1,0 +1,82 @@
+{
+    "name": "TinyGSM", 
+    "repository": {
+        "url": "https://github.com/vshymanskyy/TinyGSM.git", 
+        "type": "git"
+    }, 
+    "platforms": [
+        "atmelavr", 
+        "atmelmegaavr", 
+        "atmelsam", 
+        "espressif32", 
+        "espressif8266", 
+        "gd32v", 
+        "infineonxmc", 
+        "intel_arc32", 
+        "kendryte210", 
+        "linux_arm", 
+        "microchippic32", 
+        "nordicnrf51", 
+        "nordicnrf52", 
+        "ststm32", 
+        "ststm8", 
+        "teensy", 
+        "timsp430"
+    ], 
+    "frameworks": [
+        "energia", 
+        "wiringpi", 
+        "arduino"
+    ], 
+    "version": "0.10.6", 
+    "export": {
+        "exclude": [
+            "extras/*", 
+            "tools/*"
+        ]
+    }, 
+    "examples": "examples/*/*.ino", 
+    "authors": [
+        {
+            "maintainer": true, 
+            "name": "Volodymyr Shymanskyy", 
+            "url": "https://github.com/vshymanskyy", 
+            "email": null
+        }
+    ], 
+    "keywords": [
+        "m95", 
+        "ai thinker", 
+        "at", 
+        "sim7000", 
+        "mc60e", 
+        "bg96", 
+        "sim800", 
+        "esp8266", 
+        "sim808", 
+        "sim968", 
+        "sim868", 
+        "sim908", 
+        "sim900", 
+        "ublox", 
+        "quectel", 
+        "sim800c", 
+        "simcom", 
+        "sim800a", 
+        "at commands", 
+        "a7", 
+        "a6", 
+        "sim900d", 
+        "sim800h", 
+        "sim900a", 
+        "sim800l", 
+        "lte", 
+        "m590", 
+        "mc60", 
+        "gsm", 
+        "lte-m"
+    ], 
+    "homepage": "https://github.com/vshymanskyy/TinyGSM", 
+    "id": 1287, 
+    "description": "A small Arduino library for GPRS modules, that just works. Includes examples for Blynk, MQTT, File Download, and Web Client. Supports many GSM, LTE, and WiFi modules with AT command interfaces."
+}
