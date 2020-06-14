@@ -81,7 +81,7 @@ void callback(char * p_topic, byte * p_payload, uint16_t p_length){
     } else if(t>=0 && t<=2){
       report_status = t;
     } 
-    log_update_color(fix.valid.location,fix.satellites,gprs_online,gprs_rssi,getTime(),report_status,batt_voltage);
+    log_update_color(fix.valid.location,fix.satellites,gprs_online,gprs_rssi,getTime(),report_status,readBattery(false));
   } else if (!strcmp(p_topic, build_topic(MQTT_CONF_SKIP))){
     p_payload[p_length] = 0x00;
     skip_location_pub = atoi((char*)p_payload);
@@ -96,7 +96,7 @@ void callback(char * p_topic, byte * p_payload, uint16_t p_length){
     pln(topic_buffer, COLOR_PURPLE);
   } else if (!strcmp(p_topic, build_topic(MQTT_CONF_SLEEP))){
     p_payload[p_length] = 0x00;
-    uint8_t sleep = atoi((char*)p_payload);
+    uint16_t sleep = atoi((char*)p_payload);
     log("sleep update to ");
     sprintf(topic_buffer,"%i",sleep);
     pln(topic_buffer, COLOR_PURPLE);
@@ -137,7 +137,9 @@ void setup() {
   Serial.println("======= CONFIG ===========");
 
   // set serial for GPS
+  pinMode(GPS_PPS,INPUT);
   SerialGPS.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+  gps.send_P( &SerialGPS, F("PUBX,40,GST,0,1,0,0,0,0") ); // enable GST sentence, one per update interval
 
   // Start I2C communication
   I2CPower.begin(I2C_SDA, I2C_SCL, 400000);
@@ -182,8 +184,22 @@ void setup() {
     // Configure the wake up source as timer wake up  
     esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
   }
+
+  gps.send_P( &SerialGPS, F("PUBX,40,GST,0,1,0,0,0,0") ); // enable GST sentence, one per update interval
 }
 
+uint16_t get_accucary(bool height){
+  uint16_t ret;
+  if(!height){
+    ret = int(sqrt(fix.lat_err()*fix.lat_err()+fix.lon_err()*fix.lon_err()));
+  } else {
+    ret = int(fix.alt_err());
+  }
+  if(ret == 0){ // never return 0, owntracks will ignore msg with 0 acc
+    ret++;
+  }
+  return ret;
+}
 
 
 uint32_t mktime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second){
@@ -394,7 +410,6 @@ void loop() {
           if(!lwt_published){
             publish_lwt();
           }
-
           
 
           // get battery data
@@ -410,7 +425,7 @@ void loop() {
             sprintf(msg,"%i .. ",pos_pub_counter);
             p(msg,COLOR_NONE);
             sprintf(msg,"{\"_type\":\"location\",\"acc\":%i,\"alt\":%i,\"batt\":%i,\"conn\":\"m\",\"lat\":%f,\"lon\":%f,\"t\":\"u\",\"tid\":\"cw\",\"tst\":%u,\"vac\":%i,\"vel\":%i}",
-              1,int(fix.altitude()), readBattery(false), fix.latitude(),fix.longitude(),getTime(),1,int(fix.speed()));    // acc value required for HA    
+              get_accucary(false),int(fix.altitude()), readBattery(false), fix.latitude(),fix.longitude(),getTime(),get_accucary(true),int(fix.speed()));    // acc value required for HA    
             if(mqtt_client.publish(build_topic("",true),msg,true)){
               pln(" ok",COLOR_GREEN);
               pos_pub_counter++;

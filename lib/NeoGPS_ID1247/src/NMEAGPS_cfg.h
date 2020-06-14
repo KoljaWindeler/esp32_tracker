@@ -31,13 +31,13 @@
 // required if you will be doing time_t-to-clock_t operations.
 
 #define NMEAGPS_PARSE_GGA
-//#define NMEAGPS_PARSE_GLL
-//#define NMEAGPS_PARSE_GSA
-//#define NMEAGPS_PARSE_GSV
-//#define NMEAGPS_PARSE_GST
+#define NMEAGPS_PARSE_GLL
+#define NMEAGPS_PARSE_GSA
+#define NMEAGPS_PARSE_GSV
+#define NMEAGPS_PARSE_GST
 #define NMEAGPS_PARSE_RMC
-//#define NMEAGPS_PARSE_VTG
-//#define NMEAGPS_PARSE_ZDA
+#define NMEAGPS_PARSE_VTG
+#define NMEAGPS_PARSE_ZDA
 
 //------------------------------------------------------
 // Select which sentence is sent *last* by your GPS device
@@ -301,7 +301,7 @@
 // Sometimes, a little extra space is needed to parse an intermediate form.
 // This config items enables extra space.
 
-//#define NMEAGPS_PARSING_SCRATCHPAD
+#define NMEAGPS_PARSING_SCRATCHPAD
 
 //------------------------------------------------------
 // If you need to know the exact UTC time at *any* time,

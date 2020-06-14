@@ -10,6 +10,7 @@
 #define GPS_RX               19
 #define GPS_TX               18
 #define GPS_EN               14
+#define GPS_PPS              17
 // battery
 #define BATTERY              32
 #define BAT2PER              (2250-1630)*100
