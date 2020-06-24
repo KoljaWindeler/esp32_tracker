@@ -1,14 +1,3 @@
-// Set serial for debug console (to Serial Monitor, default speed 115200)
-#define SerialMon Serial
-// Set serial for AT commands (to SIM800 module)
-#define SerialAT Serial1
-// Serial interface for GPS interface
-#define SerialGPS Serial2
-
-// Configure TinyGSM library
-#define TINY_GSM_MODEM_SIM800      // Modem is SIM800
-#define TINY_GSM_RX_BUFFER   1024  // Set RX buffer to 1Kb
-
 #include <Arduino.h>
 #include "main.h"
 #include <Wire.h>
@@ -27,82 +16,6 @@ gps_fix fix;
 TinyGsmClient gsmClient(modem);   // TinyGSM Client for Internet connection
 PubSubClient mqtt_client(gsmClient);
 configuration cnfg;
-
-
-#define uS_TO_S_FACTOR 1000000     /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP  30//0        /* Time ESP32 will go to sleep (in seconds) 300 seconds = 5 minutes */
-
-#define IP5306_ADDR          0x75
-#define IP5306_REG_SYS_CTL0  0x00
-
-bool setPowerBoostKeepOn(int en){
-  I2CPower.beginTransmission(IP5306_ADDR);
-  I2CPower.write(IP5306_REG_SYS_CTL0);
-  if (en) {
-    I2CPower.write(0x37); // Set bit1: 1 enable 0 disable boost keep on
-  } else {
-    I2CPower.write(0x35); // 0x37 is default reg value
-  }
-  return I2CPower.endTransmission() == 0;
-}
-
-char* build_topic(char* topic){
-  return build_topic(topic, false);
-}
-
-char* build_topic(char* topic, bool is_publish){
-  if(is_publish){
-    if(strlen(cnfg.cnfg.owntracks_prefix)>0){
-      sprintf(topic_buffer,"%s/%s/%s", cnfg.cnfg.owntracks_prefix, cnfg.cnfg.owntracks_user , cnfg.cnfg.dev);
-    } else {
-      sprintf(topic_buffer,"%s/%s", cnfg.cnfg.owntracks_user, cnfg.cnfg.dev);
-    }
-  } else {
-    if(strlen(cnfg.cnfg.owntracks_prefix)>0){
-      sprintf(topic_buffer,"%s/%s/%s", cnfg.cnfg.owntracks_prefix, cnfg.cnfg.dev, topic);
-    } else {
-      sprintf(topic_buffer,"%s/%s", cnfg.cnfg.dev, topic);
-    }
-  }
-  return topic_buffer;
-}
-
-void callback(char * p_topic, byte * p_payload, uint16_t p_length){
-  if (!strcmp(p_topic, build_topic(MQTT_CONF_MODE))){
-    logln("mode update");
-    p_payload[p_length] = 0x00;
-    uint8_t t = atoi((char*)p_payload);
-    if(!strcmp((char*)p_payload, "FAST")){
-      report_status = REPORT_STATUS_FAST_SLEEP;
-    } else if(!strcmp((char*)p_payload, "AWAKE")){
-      report_status = REPORT_STATUS_AWAKE;
-    } else if(!strcmp((char*)p_payload, "INSTANT")){
-      report_status = REPORT_STATUS_INSTANT_SLEEP;
-    } else if(t>=0 && t<=2){
-      report_status = t;
-    } 
-    log_update_color(fix.valid.location,fix.satellites,gprs_online,gprs_rssi,getTime(),report_status,readBattery(false));
-  } else if (!strcmp(p_topic, build_topic(MQTT_CONF_SKIP))){
-    p_payload[p_length] = 0x00;
-    skip_location_pub = atoi((char*)p_payload);
-    log("skip update to ");
-    sprintf(topic_buffer,"%i",skip_location_pub);
-    pln(topic_buffer, COLOR_PURPLE);
-  } else if (!strcmp(p_topic, build_topic(MQTT_CONF_LOCPUBLISHES))){
-    p_payload[p_length] = 0x00;
-    total_location_pub = atoi((char*)p_payload);
-    log("update total location updates to ");
-    sprintf(topic_buffer,"%i",total_location_pub);
-    pln(topic_buffer, COLOR_PURPLE);
-  } else if (!strcmp(p_topic, build_topic(MQTT_CONF_SLEEP))){
-    p_payload[p_length] = 0x00;
-    uint16_t sleep = atoi((char*)p_payload);
-    log("sleep update to ");
-    sprintf(topic_buffer,"%i",sleep);
-    pln(topic_buffer, COLOR_PURPLE);
-    esp_sleep_enable_timer_wakeup(sleep * uS_TO_S_FACTOR);
-  };
-}
 
 void setup() {
   lwt_published = false;
@@ -153,6 +66,7 @@ void setup() {
     pln(" FAILED",COLOR_RED);
   }
 
+
   // Set modem reset, enable, power pins
   pinMode(MODEM_PWKEY, OUTPUT);
   pinMode(MODEM_RST, OUTPUT);
@@ -164,20 +78,30 @@ void setup() {
   pinMode(GPS_EN, OUTPUT);
   digitalWrite(GPS_EN, HIGH);
 
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BATTERY_PIN,OUTPUT);
+  digitalWrite(BATTERY_PIN, HIGH); // battery on
+  gpio_hold_en((gpio_num_t)BATTERY_PIN); // hold during sleep
+
   // Set GSM module baud rate and UART pins
   SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
   // Restart SIM800 module, it takes quite some time
   // To skip it, call init() instead of restart()
   if(strcmp(cnfg.cnfg.apn,"new")){
     logln(F("Initializing modem..."));
-    //modem.restart();
-    modem.init();
+    modem.restart();
+    // modem.init();
     // use modem.init() if you don't need the complete restart
 
     // Unlock your SIM card with a PIN if needed
-    //if (strlen(simPIN) && modem.getSimStatus() != 3 ) {
-    //  modem.simUnlock(simPIN);
-    //}
+    if (strlen((char*)cnfg.cnfg.simPIN) && modem.getSimStatus() != 3 ) {
+      log(F("Unlocking SIM..."));
+      if(modem.simUnlock((char*)cnfg.cnfg.simPIN)){
+        pln(" FAILED",COLOR_RED);
+      } else {
+        pln(" OK",COLOR_GREEN);
+      }
+    }
     mqtt_client.setServer((char*)cnfg.cnfg.mqtt_server,atoi(cnfg.cnfg.mqtt_port));
     mqtt_client.setCallback(callback); // in main.cpp
 
@@ -187,6 +111,84 @@ void setup() {
 
   gps.send_P( &SerialGPS, F("PUBX,40,GST,0,1,0,0,0,0") ); // enable GST sentence, one per update interval
 }
+
+bool setPowerBoostKeepOn(int en){
+  I2CPower.beginTransmission(IP5306_ADDR);
+  I2CPower.write(IP5306_REG_SYS_CTL0);
+  if (en) {
+    I2CPower.write(0x37); // Set bit1: 1 enable 0 disable boost keep on
+  } else {
+    I2CPower.write(0x00); // 0x37 is default reg value
+  }
+  return I2CPower.endTransmission() == 0;
+}
+
+char* build_topic(char* topic){
+  return build_topic(topic, false);
+}
+
+char* build_topic(char* topic, bool is_publish){
+  if(is_publish){
+    if(strlen(cnfg.cnfg.owntracks_prefix)>0){
+      sprintf(topic_buffer,"%s/%s/%s", cnfg.cnfg.owntracks_prefix, cnfg.cnfg.owntracks_user , cnfg.cnfg.dev);
+    } else {
+      sprintf(topic_buffer,"%s/%s", cnfg.cnfg.owntracks_user, cnfg.cnfg.dev);
+    }
+  } else {
+    if(strlen(cnfg.cnfg.owntracks_prefix)>0){
+      sprintf(topic_buffer,"%s/%s/%s", cnfg.cnfg.owntracks_prefix, cnfg.cnfg.dev, topic);
+    } else {
+      sprintf(topic_buffer,"%s/%s", cnfg.cnfg.dev, topic);
+    }
+  }
+  return topic_buffer;
+}
+
+void callback(char * p_topic, byte * p_payload, uint16_t p_length){
+  if (!strcmp(p_topic, build_topic(MQTT_CONF_MODE))){
+    logln("mode update");
+    p_payload[p_length] = 0x00;
+    uint8_t t = atoi((char*)p_payload);
+    if(!strcmp((char*)p_payload, "FAST")){
+      report_status = REPORT_STATUS_FAST_SLEEP;
+      digitalWrite(BATTERY_PIN, HIGH); // battery on
+    } else if(!strcmp((char*)p_payload, "AWAKE")){
+      report_status = REPORT_STATUS_AWAKE;
+      digitalWrite(BATTERY_PIN, HIGH); // battery on
+    } else if(!strcmp((char*)p_payload, "INSTANT")){
+      report_status = REPORT_STATUS_INSTANT_SLEEP;
+      digitalWrite(BATTERY_PIN, HIGH); // battery on
+    } else if(!strcmp((char*)p_payload, "OFF")){
+      setPowerBoostKeepOn(0);
+      logln("running on battery disabled");
+      digitalWrite(BATTERY_PIN, LOW); // battery off
+    } else if(t>=0 && t<=2){
+      report_status = t;
+      digitalWrite(BATTERY_PIN, HIGH); // battery on
+    } 
+    log_update_color(fix.valid.location,fix.satellites,gprs_online,gprs_rssi,getTime(),report_status,readBattery(false));
+  } else if (!strcmp(p_topic, build_topic(MQTT_CONF_SKIP))){
+    p_payload[p_length] = 0x00;
+    skip_location_pub = atoi((char*)p_payload);
+    log("skip update to ");
+    sprintf(topic_buffer,"%i",skip_location_pub);
+    pln(topic_buffer, COLOR_PURPLE);
+  } else if (!strcmp(p_topic, build_topic(MQTT_CONF_LOCPUBLISHES))){
+    p_payload[p_length] = 0x00;
+    total_location_pub = atoi((char*)p_payload);
+    log("update total location updates to ");
+    sprintf(topic_buffer,"%i",total_location_pub);
+    pln(topic_buffer, COLOR_PURPLE);
+  } else if (!strcmp(p_topic, build_topic(MQTT_CONF_SLEEP))){
+    p_payload[p_length] = 0x00;
+    uint16_t sleep = atoi((char*)p_payload);
+    log("sleep update to ");
+    sprintf(topic_buffer,"%i",sleep);
+    pln(topic_buffer, COLOR_PURPLE);
+    esp_sleep_enable_timer_wakeup(sleep * uS_TO_S_FACTOR);
+  };
+}
+
 
 uint16_t get_accucary(bool height){
   uint16_t ret;
@@ -260,21 +262,32 @@ bool publish_lwt(){
 
 bool check_connection(){
   gprs_online = false;
+  if(!modem.isNetworkConnected()){
+    log(F("Network not connected, trying to reconnect..."));
+    modem.waitForNetwork(10000L);
+    if(!modem.isNetworkConnected()){
+      pln(" FAILED",COLOR_RED);
+      return false;
+    } else {
+      pln(" OK",COLOR_GREEN);
+    }
+  }
   if(!modem.isGprsConnected()){
     logln(F("Modem not connected, trying to reconnect..."));
     log(F("Connecting to APN: "));
     SerialMon.print(cnfg.cnfg.apn);
-    if (!modem.gprsConnect(cnfg.cnfg.apn, cnfg.cnfg.apn_user, cnfg.cnfg.apn_pw)) {
-      pln(" fail",COLOR_RED);
+    //if (!modem.gprsConnect(cnfg.cnfg.apn, cnfg.cnfg.apn_user, cnfg.cnfg.apn_pw)) {
+    if (!modem.gprsConnect("TM","","")) {
+      pln(" FAILED",COLOR_RED);
     } else {
-      pln(" ok",COLOR_GREEN);
+      pln(" OK",COLOR_GREEN);
     }
   }
 
   if(modem.isGprsConnected()){
     if(!mqtt_client.connected()){
       log(F("MQTT not connected, trying to reconnect"));
-      if(!mqtt_client.connect("test_id", cnfg.cnfg.mqtt_user, cnfg.cnfg.mqtt_pw, build_topic("",true), 0, true, "lost signal")){
+      if(!mqtt_client.connect(cnfg.cnfg.dev, cnfg.cnfg.mqtt_user, cnfg.cnfg.mqtt_pw, build_topic(MQTT_STATUS,false), 1, true, "offline")){
         pln(" FAILED",COLOR_RED);
       } else {
         pln(" OK",COLOR_GREEN);
@@ -320,6 +333,13 @@ bool check_connection(){
         };
         mqtt_client.loop();
         mqtt_client.loop();
+        ///////////// publish online ///////////
+        log(build_topic(MQTT_STATUS));
+        if(mqtt_client.publish(build_topic(MQTT_STATUS,false),"online",true)){
+          pln(" OK",COLOR_GREEN);
+        } else {
+          pln(" FAILED",COLOR_RED);
+        };
         
           
         if(ret){
@@ -380,6 +400,9 @@ void loop() {
     gprs_rssi = modem.getSignalQuality();
     five_second_update = millis();
   };
+
+
+  digitalWrite(LED_PIN, HIGH);
 
   cnfg.SerialProgramming();
 
