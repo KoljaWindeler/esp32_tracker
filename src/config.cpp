@@ -1,16 +1,17 @@
 #include "config.h"
 
 configuration::configuration(){
-    m_size[0]=48;
+    m_size[0]=5;
     m_size[1]=48;
     m_size[2]=48;
-    m_size[3]=50;
-    m_size[4]=48;
-    m_size[5]=6;
-    m_size[6]=48;
+    m_size[3]=48;
+    m_size[4]=50;
+    m_size[5]=48;
+    m_size[6]=6;
     m_size[7]=48;
     m_size[8]=48;
     m_size[9]=48;
+    m_size[10]=48;
     
     skip_last = 0; // skip capability
     inConfig = false;
@@ -43,11 +44,28 @@ bool configuration::SerialProgramming(){
                 //Serial.printf("+%i %i\r\n",f_p,f_start);
                 // no text entered but [enter], keep content
                 if(f_p == f_start && char_buffer == 13){
-                    strcpy((char*)p,getElement(i));
-                    f_p+=strlen(getElement(i));
-                    p+=strlen(getElement(i));
+                    if(strlen(getElement(i))){
+                        strcpy((char*)p,getElement(i));
+                        f_p+=strlen(getElement(i));
+                        p+=strlen(getElement(i));
+                    } else {
+                        *p=0x00;
+                        f_p+=1;
+                        p+=1;
+                    }
                     Serial.print(getElement(i));
                 }
+                // only one char entered
+                if(f_p == f_start+1 && char_buffer == 13){
+                    uint8_t* a=p;
+                    a--;
+                    //Serial.printf("%c = a, %c = p\r\n",*a,*p);
+                    if(*a==' '){
+                        //Serial.println("Input started with blank, set it to 0x00");
+                        *(p-1)=0x00;
+                    }
+                }
+
                 // seach for the field that starts closes to our current pos
                 if (f_p <= f_start) {
                     for (int ii = 0; ii < f_start - f_p; ii++) { // add as many 0x00 to the configuration as required
@@ -63,7 +81,11 @@ bool configuration::SerialProgramming(){
                     if (i >= 0 && i < sizeof(m_size) / sizeof(m_size[0]) - skip_last) {
                         Serial.println("");
                         explainStruct(i, false);
-                        Serial.printf("[%s]\r\n",getElement(i));
+                        if(strlen(getElement(i))){
+                            Serial.printf("[%s]\r\n",getElement(i));
+                        } else {
+                            Serial.println("[(blank)]");
+                        }
                     } else if (i == sizeof(m_size) / sizeof(m_size[0]) - skip_last) { // last segement .. save and reboot
                         // fill the buffer
                         Serial.print(F("\r\n==========\r\nconfiguration stored\r\n"));
@@ -134,9 +156,13 @@ bool configuration::SerialProgramming(){
 
 
 void configuration::explainFullStruct(){
-	for(uint8_t i=0; i<10; i++){
+	for(uint8_t i=0; i<11; i++){
 		explainStruct(i, false);
-		Serial.println(getElement(i));
+        if(strlen(getElement(i))==0){
+            Serial.println("(blank)");
+        } else {
+    		Serial.println(getElement(i));
+        }
 	}
 }
 
@@ -144,25 +170,27 @@ void configuration::explainStruct(uint8_t i, boolean rn){
 	if (rn) {
 		Serial.print(F("\r\n"));
 	}
-	if (i == 0) {
+    if (i == 0) {
+		Serial.print(F("SIM Pin: "));
+    } else if (i == 1) {
 		Serial.print(F("APN url: "));
-	} else if (i == 1) {
-		Serial.print(F("APN user: "));
 	} else if (i == 2) {
-		Serial.print(F("APN pw: "));
+		Serial.print(F("APN user: "));
 	} else if (i == 3) {
-		Serial.print(F("device name: "));
+		Serial.print(F("APN pw: "));
 	} else if (i == 4) {
-		Serial.print(F("MQTT server URL: "));
+		Serial.print(F("device name: "));
 	} else if (i == 5) {
-		Serial.print(F("MQTT server port: "));
+		Serial.print(F("MQTT server URL: "));
 	} else if (i == 6) {
-		Serial.print(F("MQTT server user: "));
+		Serial.print(F("MQTT server port: "));
 	} else if (i == 7) {
-		Serial.print(F("MQTT server pw: "));
+		Serial.print(F("MQTT server user: "));
 	} else if (i == 8) {
+		Serial.print(F("MQTT server pw: "));
+	} else if (i == 9) {
 		Serial.print(F("owntracks prefix: "));
-    } else if (i == 9) {
+    } else if (i == 10) {
 		Serial.print(F("owntracks user: "));
 	}
 	if (rn) {
@@ -172,22 +200,24 @@ void configuration::explainStruct(uint8_t i, boolean rn){
 
 char* configuration::getElement(uint8_t i){
 	if(i==0){
+		return cnfg.simPIN;
+    } else if(i==1){
 		return cnfg.apn;
-	} else if(i==1){
-		return cnfg.apn_user;
 	} else if(i==2){
-		return cnfg.apn_pw;
+		return cnfg.apn_user;
 	} else if(i==3){
-		return cnfg.dev;
+		return cnfg.apn_pw;
 	} else if(i==4){
-		return cnfg.mqtt_server;
+		return cnfg.dev;
 	} else if(i==5){
-		return cnfg.mqtt_port;
+		return cnfg.mqtt_server;
 	} else if(i==6){
+		return cnfg.mqtt_port;
+	} else if(i==7){
 		return cnfg.mqtt_user;
-    } else if(i==7){
-		return cnfg.mqtt_pw;
     } else if(i==8){
+		return cnfg.mqtt_pw;
+    } else if(i==9){
 		return cnfg.owntracks_prefix;
 	} 
 	return cnfg.owntracks_user;
@@ -212,6 +242,7 @@ boolean configuration::load(){
 		// Serial.println("EEok");
 		return true;
 	} else {
+        sprintf(cnfg.simPIN, "new");
 		sprintf(cnfg.apn, "new");
 		sprintf(cnfg.apn_user, "new");
 		sprintf(cnfg.apn_pw, "new");

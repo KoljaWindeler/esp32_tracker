@@ -2,9 +2,10 @@
 	#define configuration_h
     #include <Arduino.h>
     #include <EEPROM.h>
-    #define configuration_LENGTH 48+48+48+50+48+6+48+48+48+48
+    #define configuration_LENGTH 5+48+48+48+50+48+6+48+48+48+48
 
 struct configuration_data { //
+    char simPIN[5];
     char apn[48];
     char apn_user[48];
     char apn_pw[48];
@@ -38,7 +39,7 @@ class configuration {
         uint8_t* p;
         uint16_t f_p;
         uint16_t f_start;
-        uint8_t m_size[10];
+        uint8_t m_size[11];
        	uint8_t skip_last;
 };
 
